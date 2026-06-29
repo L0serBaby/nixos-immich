@@ -17,10 +17,12 @@
   systemd.services.cloud-init.after = [ "network-pre.target" ];
 
   # Declarative mount for the Immich data disk (sdb)
-  # Using by-label so this survives disk re-attach/clone without UUID drift
+  # Mounted by device path, not by-label, to avoid boot-time udev race
+  # nofail prevents a missing/slow disk from dropping the whole boot to emergency mode
   fileSystems."/var/lib/immich" = {
-    device = "/dev/disk/by-label/immich-data";
+    device = "/dev/sdb";
     fsType = "ext4";
+    options = [ "nofail" ];
   };
 
   # SSH - password auth
@@ -37,6 +39,9 @@
     extraGroups = [ "wheel" ];
     initialPassword = "changeme";
   };
+
+  # Set a root password too, so emergency mode console is reachable if something fails
+  users.users.root.initialPassword = "changeme";
 
   environment.systemPackages = with pkgs; [
     git
