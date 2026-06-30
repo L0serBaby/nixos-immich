@@ -16,13 +16,21 @@
   };
   systemd.services.cloud-init.after = [ "network-pre.target" ];
 
-  # Declarative mount for the Immich data disk (sdb)
-  # Mounted by device path, not by-label, to avoid boot-time udev race
+  # Declarative mount for the Immich data disk
+  # by-label, NOT /dev/sdX - disk letters (sda/sdb) are not stable across reboots on this platform
+  # x-systemd.device-timeout gives udev time to register the label before giving up
   # nofail prevents a missing/slow disk from dropping the whole boot to emergency mode
   fileSystems."/var/lib/immich" = {
-    device = "/dev/sdb";
+    device = "/dev/disk/by-label/immich-data";
     fsType = "ext4";
-    options = [ "nofail" ];
+    options = [ "nofail" "x-systemd.device-timeout=30s" ];
+  };
+
+  # Explicit ordering so immich-server actually waits for its dependencies
+  # instead of racing them on boot
+  systemd.services.immich-server = {
+    after = [ "postgresql.service" "redis-immich.service" "var-lib-immich.mount" ];
+    requires = [ "postgresql.service" "redis-immich.service" "var-lib-immich.mount" ];
   };
 
   # SSH - password auth
@@ -40,7 +48,6 @@
     initialPassword = "changeme";
   };
 
-  # Set a root password too, so emergency mode console is reachable if something fails
   users.users.root.initialPassword = "changeme";
 
   environment.systemPackages = with pkgs; [
